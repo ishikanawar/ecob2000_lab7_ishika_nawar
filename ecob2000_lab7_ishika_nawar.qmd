@@ -1,0 +1,331 @@
+---
+title: "ecob2000_lab7_ishika_nawar"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+library(tidyverse)
+library(AER)
+library(haven)
+library(ggplot2)
+
+setwd("~/Documents/R Projects/ecob2000_lab6")
+load("ACS2021_couples.Rdata")
+attach(acs2021_couples)
+acs2021_couples
+```
+
+```{r}
+acs2021_couples$RACE <- fct_recode(as.factor(acs2021_couples$RACE),
+                                   "White" = "1",
+                                   "Black" = "2",
+                                   "American Indian or Alaska Native" = "3",
+                                   "Chinese" = "4",
+                                   "Japanese" = "5",
+                                   "Other Asian or Pacific Islander" = "6",
+                                   "Other race" = "7",
+                                   "two races" = "8",
+                                   "three races" = "9")
+
+acs2021_couples$h_race <- fct_recode(as.factor(acs2021_couples$h_race),
+                                     "White" = "1",
+                                     "Black" = "2",
+                                     "American Indian or Alaska Native" = "3",
+                                     "Chinese" = "4",
+                                     "Japanese" = "5",
+                                     "Other Asian or Pacific Islander" = "6",
+                                     "Other race" = "7",
+                                     "two races" = "8",
+                                     "three races" = "9")
+
+acs2021_couples$HISPAN <- fct_recode(as.factor(acs2021_couples$HISPAN),
+                                     "Not Hispanic" = "0",
+                                     "Mexican" = "1",
+                                     "Puerto Rican" = "2",
+                                     "Cuban" = "3",
+                                     "Other" = "4")
+acs2021_couples$h_hispan <- fct_recode(as.factor(acs2021_couples$h_hispan),
+                                       "Not Hispanic" = "0",
+                                       "Mexican" = "1",
+                                       "Puerto Rican" = "2",
+                                       "Cuban" = "3",
+                                       "Other" = "4")
+```
+
+```{r}
+# Establishing the subset
+trad_data <- acs2021_couples %>%
+  filter(SEX == "Female", h_sex == 1, RELATE == 2, AGE >= 18, h_age >= 18)
+
+#Establishing the dependent dummy variable
+
+trad_data$age_diff <- trad_data$AGE - trad_data$h_age
+
+trad_data$he_more_than_5yrs_than_her <- as.numeric(trad_data$age_diff < -5)
+```
+
+```{r}
+summary(acs2021_couples)
+```
+
+```{r}
+table(trad_data$he_more_than_5yrs_than_her,cut(trad_data$age_diff,c(-100,-10, -5, 0, 5, 10, 100)))
+mean(trad_data$he_more_than_5yrs_than_her)  
+```
+
+```{r}
+(acs2021_couples$REGION)
+```
+
+```{r}
+# Establishing dummies for independent variable of REGION. Since the couple lives in the same household, it will be the same variable for both spouses, so only one set of dummies.
+
+trad_data$REGION_f <- factor(trad_data$REGION,
+                             levels = c(11, 12, 21, 22, 31, 32, 33, 41, 42),
+                             labels = c("New England", "Middle Atlantic", "East North Central",
+                                        "West North Central", "South Atlantic", "East South Central",
+                                        "West South Central", "Mountain", "Pacific"))
+trad_data$REGION_f <- relevel(trad_data$REGION_f, ref = "South Atlantic")
+```
+
+```{r}
+# Establishing dummies for independent variable of Race. For the wife (RACE) and husband (h_race), base = White.
+race_labels <- c("White", "Black", "American Indian or Alaska Native",
+                 "Chinese", "Japanese", "Other Asian or Pacific Islander",
+                 "Other race", "Two races", "Three or more races")
+trad_data$wife_race <- factor(trad_data$RACE,   levels = 1:9, labels = race_labels)
+trad_data$hus_race  <- factor(trad_data$h_race, levels = 1:9, labels = race_labels)
+
+trad_data$wife_race <- trad_data$RACE
+trad_data$hus_race  <- trad_data$h_race
+```
+
+```{r}
+# Establishing dummies for independent variable  of Education Levels. For the wife (EDUC) and husband (h_educ), 5 categories. Base = less than high school. (3 yrs college has 0 obs in this file.)
+educ_cat <- function(x) {
+  x <- as.character(x)
+  case_when(
+    x == "Grade 12"                                              ~ "HS",
+    x %in% c("1 year of college", "2 years of college",
+             "3 years of college")                               ~ "Some college",
+    x == "4 years of college"                                    ~ "College",
+    x == "5+ years of college"                                   ~ "Advanced degree",
+    TRUE                                                         ~ "Less than HS"
+  )
+}
+lv <- c("Less than HS", "HS", "Some college", "College", "Advanced degree")
+trad_data$wife_educ <- factor(educ_cat(trad_data$EDUC),   levels = lv)
+trad_data$hus_educ  <- factor(educ_cat(trad_data$h_educ), levels = lv)
+
+trad_data <- trad_data %>% mutate(
+  wife_hs       = as.numeric(wife_educ == "HS"),
+  wife_somecoll = as.numeric(wife_educ == "Some college"),
+  wife_college  = as.numeric(wife_educ == "College"),
+  wife_advdeg   = as.numeric(wife_educ == "Advanced degree"),
+  hus_hs        = as.numeric(hus_educ  == "HS"),
+  hus_somecoll  = as.numeric(hus_educ  == "Some college"),
+  hus_college   = as.numeric(hus_educ  == "College"),
+  hus_advdeg    = as.numeric(hus_educ  == "Advanced degree")
+)
+```
+
+```{r}
+# Establishing dummies for independent variable of Degree Field. DEGREE FIELD: collapse ~38 fields into a handful of groups.DEGFIELD (wife) is a factor; h_degfield (husband) is numeric IPUMS code.
+#    Convert the wife's factor to the same numeric codes first
+#    (levels are in code order; level 1 = "N/A" = 0).
+# ------------------------------------------------------------------
+codes <- c(0, 11, 13, 14, 15, 19, 20, 21, 22, 23, 24, 25, 26, 29, 32, 33, 34,
+           35, 36, 37, 38, 40, 41, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+           59, 60, 61, 62, 64)
+trad_data$wife_degcode <- codes[as.integer(trad_data$DEGFIELD)]
+table(trad_data$DEGFIELD, trad_data$wife_degcode)[1:5, 1:5]   # spot-check mapping
+
+field_group <- function(code) {
+  case_when(
+    code == 0                                    ~ "No bachelor's degree",
+    code %in% c(11, 13, 21, 24, 25, 36, 37, 50, 51) ~ "STEM",   # agric/env, CS, engineering, bio, math, phys sci
+    code == 62                                   ~ "Business",
+    code %in% c(15, 52, 53, 54, 55)              ~ "Social science/Public service", # area studies, psych, CJ, public affairs, soc sci
+    code == 23                                   ~ "Education",
+    code == 61                                   ~ "Health",
+    code %in% c(19, 20, 26, 33, 34, 35, 48, 49, 60, 64) ~ "Humanities/Arts/Comm",
+    TRUE                                         ~ "Other"
+  )
+}
+fl <- c("No bachelor's degree", "STEM", "Business", "Social science/Public service",
+        "Education", "Health", "Humanities/Arts/Comm", "Other")
+trad_data$wife_field <- factor(field_group(trad_data$wife_degcode), levels = fl)
+trad_data$hus_field  <- factor(field_group(trad_data$h_degfield),   levels = fl)
+
+table(trad_data$wife_field)
+table(trad_data$hus_field)
+```
+
+```{r}
+# Model A: region, race, and the full 5-level education (no field)
+mA <- lm(he_more_than_5yrs_than_her ~ REGION_f + wife_race + hus_race +
+           wife_educ + hus_educ, data = trad_data)
+
+# Model B: region, race, and degree field (no education levels)
+mB <- lm(he_more_than_5yrs_than_her ~ REGION_f + wife_race + hus_race +
+           wife_field + hus_field, data = trad_data)
+
+summary(mA)
+```
+
+```{r}
+summary(mB)
+```
+
+```{r}
+# F-test to run for Model A
+library(sandwich); library(lmtest); library(car)
+
+# Block F-tests (classical)
+no_region <- update(mA, . ~ . - REGION_f)
+no_race   <- update(mA, . ~ . - wife_race - hus_race)
+no_educ   <- update(mA, . ~ . - wife_educ - hus_educ)
+anova(no_region, mA)
+anova(no_race,   mA)
+anova(no_educ,   mA)
+
+# Same tests with robust SEs (preferred for a linear probability model)
+nm <- names(coef(mA))
+linearHypothesis(mA, nm[grepl("^REGION_f",  nm)], vcov = vcovHC(mA, type = "HC1"))
+linearHypothesis(mA, nm[grepl("race",       nm)], vcov = vcovHC(mA, type = "HC1"))
+linearHypothesis(mA, nm[grepl("_educ",      nm)], vcov = vcovHC(mA, type = "HC1"))
+
+# Is the husband's Advanced degree really different from his College coefficient?
+linearHypothesis(mA, "hus_educAdvanced degree = hus_educCollege",
+                 vcov = vcovHC(mA, type = "HC1"))
+
+# Do wife's and husband's education matter equally at the top?
+linearHypothesis(mA, "wife_educAdvanced degree = hus_educAdvanced degree",
+                 vcov = vcovHC(mA, type = "HC1"))
+```
+
+```{r}
+library(sandwich); library(car)
+V <- vcovHC(mB, type = "HC1")
+
+# Joint test: do wife and husband field matter at all?
+nm <- names(coef(mB))
+linearHypothesis(mB, nm[grepl("_field", nm)], vcov = V)
+
+# Specific predictions (wife)
+linearHypothesis(mB, "wife_fieldSTEM = wife_fieldSocial science/Public service", vcov = V)
+linearHypothesis(mB, "wife_fieldBusiness = wife_fieldSocial science/Public service", vcov = V)
+
+# Same for husband
+linearHypothesis(mB, "hus_fieldSTEM = hus_fieldSocial science/Public service", vcov = V)
+linearHypothesis(mB, "hus_fieldBusiness = hus_fieldSocial science/Public service", vcov = V)
+```
+
+```{r}
+# Graphs
+
+# ------------------------------------------------------------------
+# Helper: adjusted predicted probability for each level of ONE factor.
+# For each level, set that factor to the level for EVERY row in the
+# estimation sample, leave all other variables as observed, and average
+# the predictions. CIs use robust (HC1) standard errors.
+# ------------------------------------------------------------------
+adj_pred <- function(m, var, V = vcovHC(m, type = "HC1")) {
+  d  <- m$model                      # data actually used in the regression
+  lv <- levels(d[[var]])
+  out <- lapply(lv, function(l) {
+    d2 <- d
+    d2[[var]] <- factor(rep(l, nrow(d2)), levels = lv)
+    X  <- model.matrix(delete.response(terms(m)), d2, xlev = m$xlevels)
+    xb <- colMeans(X)                # average design row
+    est <- sum(xb * coef(m))
+    se  <- sqrt(drop(t(xb) %*% V %*% xb))
+    data.frame(level = l, est = est, lo = est - 1.96 * se, hi = est + 1.96 * se)
+  })
+  res <- do.call(rbind, out)
+  res$level <- factor(res$level, levels = lv)
+  res
+}
+
+# ------------------------------------------------------------------
+# 1. REGION (Model A)
+# ------------------------------------------------------------------
+reg <- adj_pred(mA, "REGION_f")
+
+ggplot(reg, aes(x = reorder(level, est), y = est)) +
+  geom_pointrange(aes(ymin = lo, ymax = hi)) +
+  coord_flip() +
+  labs(title = "Predicted probability husband is 5+ years older, by region",
+       x = NULL, y = "Predicted probability (95% CI)") +
+  theme_minimal()
+
+# ------------------------------------------------------------------
+# 2. RACE (Model A): wife and husband side by side
+# ------------------------------------------------------------------
+race <- bind_rows(
+  adj_pred(mA, "wife_race") %>% mutate(who = "Wife's race"),
+  adj_pred(mA, "hus_race")  %>% mutate(who = "Husband's race")
+)
+
+ggplot(race, aes(x = level, y = est, color = who)) +
+  geom_pointrange(aes(ymin = lo, ymax = hi),
+                  position = position_dodge(width = 0.5)) +
+  coord_flip() +
+  labs(title = "Predicted probability husband is 5+ years older, by race",
+       x = NULL, y = "Predicted probability (95% CI)", color = NULL) +
+  theme_minimal()
+
+# ------------------------------------------------------------------
+# 3. EDUCATION LEVELS (Model A)
+# ------------------------------------------------------------------
+educ <- bind_rows(
+  adj_pred(mA, "wife_educ") %>% mutate(who = "Wife's education"),
+  adj_pred(mA, "hus_educ")  %>% mutate(who = "Husband's education")
+)
+
+ggplot(educ, aes(x = level, y = est, color = who, group = who)) +
+  geom_line() +
+  geom_pointrange(aes(ymin = lo, ymax = hi),
+                  position = position_dodge(width = 0.15)) +
+  labs(title = "Predicted probability husband is 5+ years older, by education",
+       x = NULL, y = "Predicted probability (95% CI)", color = NULL) +
+  theme_minimal()
+
+# ------------------------------------------------------------------
+# 4. DEGREE FIELD (Model B)
+# ------------------------------------------------------------------
+fld <- bind_rows(
+  adj_pred(mB, "wife_field") %>% mutate(who = "Wife's field"),
+  adj_pred(mB, "hus_field")  %>% mutate(who = "Husband's field")
+)
+
+ggplot(fld, aes(x = level, y = est, color = who)) +
+  geom_pointrange(aes(ymin = lo, ymax = hi),
+                  position = position_dodge(width = 0.5)) +
+  coord_flip() +
+  labs(title = "Predicted probability husband is 5+ years older, by degree field",
+       x = NULL, y = "Predicted probability (95% CI)", color = NULL) +
+  theme_minimal()
+```
